@@ -2,10 +2,22 @@
 
 import { fetchSheetData } from "@/services/googleSheets";
 import { Button } from "@headlessui/react";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react"
 import { headers } from "next/headers";
+
+interface SubDropdownItem {
+  label: string;
+  href?: string;
+}
+
+interface DropdownItem {
+  label: string;
+  href?: string;
+  subItems?: SubDropdownItem[];
+}
+
 
 export default function Home() {
 
@@ -16,12 +28,28 @@ export default function Home() {
   const [reload, setReload] = useState<boolean>(false);
 
   const [tags, setTags] = useState<{ [key: string]: number }>({});
+  const [folders, setFolders] = useState<{ [key: string]: number }>({});
 
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
 
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
 
+  const [foldertagselected, setFolderTagSelected] = useState<number[]>([0,0]);
+
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  const [dropdownItems, setDropdownItems] = useState<DropdownItem[]>([
+    {
+      label: 'Normas',
+      subItems: [
+      ]
+    },
+    {
+      label: 'Pasta',
+      subItems: [
+      ]
+    }
+  ]);
 
   const { theme, setTheme } = useTheme()
   
@@ -33,8 +61,6 @@ export default function Home() {
   useEffect(() => {
 
     setRows([]);
-
-    console.log("fetching data");
 
     fetchSheetData("1opD_KKUHti9WCBQbUsFmJofxqbUN9VxOX_GIycN6rS8", "A:F").then((data) => {
       if (data?.values) {
@@ -48,6 +74,7 @@ export default function Home() {
     
   }, [reload]);
 
+  // tags da norma
   useEffect(() => {
     const result = rows.reduce((acc: { [key: string]: number }, row) => {
       const tags = row[0].split(",");
@@ -65,9 +92,10 @@ export default function Home() {
 
   }, [header, rows]);
 
+  // tags da localização/pasta
   useEffect(() => {
-    const result = rows.reduce((acc: { [key: string]: number }, row) => {
-      const tags = row[0].split(",");
+    const results = rows.reduce((acc: { [key: string]: number }, row) => {
+      const tags = row[4].split(",");
       tags.forEach((tag) => {
         if (acc[tag]) {
           acc[tag]++;
@@ -75,30 +103,92 @@ export default function Home() {
           acc[tag] = 1;
         }
       });
+
       return acc;
     }, {});
 
-    setTags(result);
+    setFolders(results);
+
   }, [header, rows]);
 
-  const handleFilterChange = (tag: string) => {
-    console.log(tag);
-    setSelectedFilters((prevFilters) =>
-      prevFilters.includes(tag)
-        ? prevFilters.filter((filter) => filter !== tag)
-        : [...prevFilters, tag]
-    );
+  useEffect(() => {
+    setDropdownItems((prevItems) => {
+      return prevItems.map((item) => {
+        if (item.label === "Normas") {
+          return {
+            ...item,
+            subItems: Object.keys(tags).map((tag) => ({
+              label: tag,
+              href: `#${tag}`,
+            })),
+          };
+        } else if (item.label === "Pasta") {
+          return {
+            ...item,
+            subItems: Object.keys(folders).map((folder) => ({
+              label: folder,
+              href: `#${folder}`,
+            })),
+          };
+        }
+        return item;
+      });
+    });
+  }, [tags, folders]);
+
+  const handleFilterChange = (marker: string, tagOrFolder: boolean) => {
+    // 0: folder, 1: tag
+    if (tagOrFolder) {
+      setSelectedFilters((prevFilters) => {
+        if (prevFilters.includes(marker)) {
+          setFolderTagSelected((prev) => {
+            return [prev[0], prev[1] - 1];
+          });
+          return prevFilters.filter((filter) => filter !== marker);
+        } else {
+          setFolderTagSelected((prev) => {
+            return [prev[0], prev[1] + 1];
+          });
+          return [...prevFilters, marker];
+        }
+      });
+    } else {
+      setSelectedFilters((prevFilters) => {
+        if (prevFilters.includes(marker)) {
+          setFolderTagSelected((prev) => {
+            return [prev[0] - 1, prev[1]];
+          });
+          return prevFilters.filter((filter) => filter !== marker);
+        } else {
+          setFolderTagSelected((prev) => {
+            return [prev[0] + 1, prev[1]];
+          });
+          return [...prevFilters, marker];
+        }
+      });
+    }
+  }
+
+  const capitalizeFirstLetter = (string: string) => {
+    return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
   };
-
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value);
   };
 
   const filteredRows = rows.filter((row) =>
-    (selectedFilters.length === 0 || selectedFilters.some((filter) => row[0].includes(filter))) &&
+    (selectedFilters.length === 0 || selectedFilters.some((filter) => row[0].includes(filter)) || selectedFilters.some((filter) => row[4].includes(filter))) &&
     (searchQuery === "" || row.some((cell) => cell.toLowerCase().includes(searchQuery.toLowerCase())))
   );
+
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [openSubDropdown, setOpenSubDropdown] = useState<string | null>(null);
+
+  const handleSubDropdownToggle = (label: string) => {
+    setOpenSubDropdown(openSubDropdown === label ? null : label);
+  };
+
 
   return (
     <div>
@@ -108,65 +198,93 @@ export default function Home() {
                 <div style={{ top: 0, zIndex: 50 }} className="flex flex-col px-4 py-3 space-y-3 bg-white dark:bg-gray-800 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 lg:space-x-4 sticky">
                   <div className="w-full md:w-1/2">
                       <form className="flex items-center">
-                          <label htmlFor="simple-search" className="sr-only">Search</label>
-                          <div className="relative w-full">
-                              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                                  <svg aria-hidden="true" className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                      <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                                  </svg>
-                              </div>
-                              <input
-                                    type="text"
-                                    id="simple-search"
-                                    value={searchQuery}
-                                    onChange={handleSearchChange}
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                                    placeholder="Search"
-                                    required
-                                    />
-                               </div>
+                        <label htmlFor="simple-search" className="sr-only">Pesquisar</label>
+                        <div className="relative w-full">
+                            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                <svg aria-hidden="true" className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                    <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <input
+                              type="text"
+                              id="simple-search"
+                              value={searchQuery}
+                              onChange={handleSearchChange}
+                              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                              placeholder="Pesquisar"
+                              required
+                            />
+                            </div>
                       </form>
                   </div>
                     <div className="flex min-h-full flex-col flex-shrink-0 space-y-3 md:flex-row md:items-center lg:justify-end md:space-y-0 md:space-x-3">
-                        
-                        <div className="relative flex items-center space-x-3 w-full md:w-auto">
-                            <button
-                                id="actionsDropdownButton"
-                                onClick={toggleDropdown}
-                                className="w-full md:w-auto flex items-center justify-center py-2 px-4 text-sm font-medium text-gray-900 focus:outline-none bg-white rounded-lg border border-gray-200 hover:bg-gray-100 hover:text-primary-700 focus:z-10 focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700"
-                                type="button"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="h-4 w-4 mr-2 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
-                                </svg>
-                                Filtros
-                                <svg className="-mr-1 ml-1.5 w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                    <path clipRule="evenodd" fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                                </svg>
-                            </button>
-                            <div
-                                id="actionsDropdown"
-                                className={`z-10 absolute top-full right-0 w-48 p-3 mt-1 bg-white rounded-lg shadow dark:bg-gray-700 ${
-                                    isDropdownOpen ? 'block' : 'hidden'
-                                }`}
-                                >
-                                <h6 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">Filtrar por</h6>
-                                <ul className="space-y-2 text-sm" aria-labelledby="filterDropdownButton">
-                                    {Object.keys(tags).map((tag) => (
-                                    <li key={tag} className="flex items-center">
-                                        <input
-                                        id={tag}
-                                        type="checkbox"
-                                        checked={selectedFilters.includes(tag)}
-                                        onChange={() => handleFilterChange(tag)}
-                                        className="w-4 h-4 bg-gray-100 border-gray-300 rounded text-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500"
-                                        />
-                                        <label htmlFor={tag} className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">{tag} ({tags[tag]})</label>
-                                    </li>
-                                    ))}
-                                </ul>
-                            </div>
+                    <div className="relative flex items-center space-x-3 w-full md:w-auto">
+                        <button 
+                          onClick={() => {setIsFilterOpen(!isFilterOpen); setOpenSubDropdown(null)}} 
+                          className="w-full md:w-auto flex items-center justify-center py-2 px-4 text-sm font-medium text-gray-900 focus:outline-none bg-white rounded-lg border border-gray-200 hover:bg-gray-100 hover:text-primary-700 focus:z-10 focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700"
+                          type="button"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="h-4 w-4 mr-2 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+                          </svg>
+                          Filtros
+                          <svg className="-mr-1 ml-1.5 w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                              <path clipRule="evenodd" fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                          </svg>
+                        </button>
+
+                        <div className={`z-10 absolute top-full right-0 w-40 bg-white rounded-lg shadow dark:bg-gray-700 ${
+                          isFilterOpen ? 'block' : 'hidden'
+                        }`}>
+                          <ul className="py-2 text-sm text-gray-700 dark:text-gray-200">
+                            {dropdownItems.map((item, index) => (
+                              <li key={index}>
+                                {item.subItems ? (
+                                  <>
+                                    <button
+                                      onClick={() => handleSubDropdownToggle(item.label)}
+                                      className="flex items-center justify-between w-full px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white"
+                                    >
+                                      {item.label}
+                                      <span className="inline-flex items-center justify-center w-4 h-4 ms-2 text-xs font-semibold text-blue-800 bg-blue-200 rounded-full">
+                                        {item.label === "Normas" ? foldertagselected[1] : foldertagselected[0]}
+                                      </span>
+                                      <svg className="w-2.5 h-2.5 ms-3 rtl:rotate-180" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
+                                        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/>
+                                      </svg>
+                                    </button>
+                                    {openSubDropdown === item.label && (
+                                      <div className="absolute left-full pl-3 top-0 w-60 bg-white rounded-lg shadow dark:bg-gray-700">
+                                        <ul className="py-2 text-sm text-gray-700 dark:text-gray-200">
+                                          {item.subItems.map((subItem, subIndex) => (
+                                            <li key={subIndex}>
+                                              <input
+                                                id={subItem.label}
+                                                type="checkbox"
+                                                checked={selectedFilters.includes(subItem.label)}
+                                                onChange={() => handleFilterChange(subItem.label, item.label === "Normas" ? true : false)}
+                                                className="w-4 h-4 bg-gray-100 border-gray-300 rounded text-primary-600 focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500"
+                                              />
+                                              <label htmlFor={subItem.label} className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">{capitalizeFirstLetter(subItem.label)} ({tags[subItem.label] || folders[subItem.label]})</label>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <a
+                                    href={item.href}
+                                    className="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white"
+                                  >
+                                    {item.label}
+                                  </a>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
                         </div>
+                      </div>
 
                         <button onClick={() => {setReload(!reload)}} type="button" className="flex items-center justify-center flex-shrink-0 px-3 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-lg focus:outline-none hover:bg-gray-100 hover:text-primary-700 focus:z-10 focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700">
                             
@@ -234,7 +352,7 @@ export default function Home() {
                                         <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
                                         <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
                                       </svg>
-                                      website
+                                      abrir
                                     </a>
                                   ) : (
                                     item
@@ -243,6 +361,14 @@ export default function Home() {
                               ))}
                             </tr>
                           ))}
+                          {
+                            // empty row
+                            filteredRows.length === 0 && (
+                              <tr>
+                                <td colSpan={header.length} className="px-4 py-4 text-center">Nenhum resultado encontrado</td>
+                              </tr>
+                            )
+                          }
                         </tbody>
                     </table>
                     )}
