@@ -185,8 +185,11 @@ export default function Home() {
   };
 
   const filteredRows = rows.filter((row) =>{
-    if (row.length < 5) {
-      return false;
+    if (row[0] === undefined){
+      row[0] = "";
+    }
+    if (row[4] === undefined){
+      row[4] = "";
     }
     return (selectedFilters.length === 0 || selectedFilters.some((filter) => row[0].includes(filter)) || selectedFilters.some((filter) => row[4].includes(filter))) &&
     (searchQuery === "" || row.some((cell) => cell.toLowerCase().includes(searchQuery.toLowerCase())))
