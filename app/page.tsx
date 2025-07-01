@@ -77,6 +77,9 @@ export default function Home() {
   // tags da norma
   useEffect(() => {
     const result = rows.reduce((acc: { [key: string]: number }, row) => {
+      if (row[0] === undefined || row[0] === "") {
+        return acc;
+      }
       const tags = row[0].split(",");
       tags.forEach((tag) => {
         if (acc[tag]) {
@@ -95,6 +98,9 @@ export default function Home() {
   // tags da localização/pasta
   useEffect(() => {
     const results = rows.reduce((acc: { [key: string]: number }, row) => {
+      if (row[4] === undefined || row[4] === "") {
+        return acc;
+      }
       const tags = row[4].split(",");
       tags.forEach((tag) => {
         if (acc[tag]) {
@@ -140,6 +146,7 @@ export default function Home() {
     // 0: folder, 1: tag
     if (tagOrFolder) {
       setSelectedFilters((prevFilters) => {
+
         if (prevFilters.includes(marker)) {
           setFolderTagSelected((prev) => {
             return [prev[0], prev[1] - 1];
@@ -177,9 +184,13 @@ export default function Home() {
     setSearchQuery(event.target.value);
   };
 
-  const filteredRows = rows.filter((row) =>
-    (selectedFilters.length === 0 || selectedFilters.some((filter) => row[0].includes(filter)) || selectedFilters.some((filter) => row[4].includes(filter))) &&
+  const filteredRows = rows.filter((row) =>{
+    if (row.length < 5) {
+      return false;
+    }
+    return (selectedFilters.length === 0 || selectedFilters.some((filter) => row[0].includes(filter)) || selectedFilters.some((filter) => row[4].includes(filter))) &&
     (searchQuery === "" || row.some((cell) => cell.toLowerCase().includes(searchQuery.toLowerCase())))
+    }
   );
 
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -379,4 +390,3 @@ export default function Home() {
     </div>
   );
 }
-
