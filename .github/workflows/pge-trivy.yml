@@ -1,0 +1,15 @@
+name: PGE Trivy
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  trivy:
+    uses: pgepi/security-ci/.github/workflows/trivy.yml@e0c074c25513c266682808fd2d68dda2ad2acf6f
+    secrets: inherit
