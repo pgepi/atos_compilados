@@ -11,5 +11,5 @@ permissions:
 
 jobs:
   trivy:
-    uses: pgepi/security-ci/.github/workflows/trivy.yml@52e4fba5cad9e7250fe4ad2d63d52c43d23ccfe5
+    uses: pgepi/security-ci/.github/workflows/trivy.yml@847c1a7431b722ca0bb35ac7232e4d33bfdf9e59
     secrets: inherit
